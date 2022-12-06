@@ -164,7 +164,7 @@ if __name__ == "__main__":
         "-t", "--topk", help="topk", type=int, default=10)
     args = parser.parse_args()
 
-    fileName = f"result_d{args.dimension}_e{args.num_epochs}_l{args.learning_rate}_w{args.walk_length}_t{args.topk}.txt"
+    fileName = f"result_d{args.dimension}_e{args.num_epochs}_l{args.learning_rate[2:]}_w{args.walk_length}_t{args.topk}.txt"
 
     hoprec = HopRec(dimension=args.dimension)
     hoprec.read_data(path="./data/ml-1m/ratings.csv")
