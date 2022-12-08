@@ -3,7 +3,7 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 from sampler import Sampler
-
+import asyncio
 
 SEED = 0
 
@@ -45,7 +45,7 @@ class HopRec():
 
     def __build_graph__(self):
         logger.info("Building graph...")
-        
+
         self.sampler = Sampler(self.graph, bidirectional=True, info=True)
         logger.info("End building graph.")
 
@@ -68,67 +68,84 @@ class HopRec():
 
     def __negitive_sample__(self, pos_item: str):
         neg_item = self.sampler.sample()
-        if neg_item == pos_item or neg_item[0] != "i":
+        while neg_item == pos_item or neg_item[0] != "i":
             neg_item = self.sampler.sample()
         return neg_item
 
-    def updateFBPR(self, u_id: str, i_id: str, j_id: str, learning_rate: float, epsilon: float):
-        """update the parameters of the model according to the feedback BPR loss
+    def updateFBPRPair(self, u_id: str, i_id: str, learning_rate: float, epsilon: float, lambda_: float, negative_sample_times: int):
+        up = 0
 
-        Args:
-            u (str): user id
-            i (str): positive item id
-            j (str): negative item id
-            learning_rate (float):  learning rate
-            epsilon (float): the parameter of the feedback BPR loss
-            tries (int): the number of tries
-        Returns:
-            bool: need update or not
-        """
+        user_loss = np.zeros(self.dimension)
+        for w_ in range(negative_sample_times):
+            u = int(u_id[2:])
+            i = int(i_id[2:])
+            j = int(self.__negitive_sample__(i_id)[2:])
 
-        u = int(u_id[2:])
-        i = int(i_id[2:])
-        j = int(j_id[2:])
+            # @ is matrix multiplication
+            x_ui = self.user_embeddings[u] @ self.item_embeddings[i]
+            x_uj = self.user_embeddings[u] @ self.item_embeddings[j]
+            x_uij = x_ui - x_uj
 
-        # @ is matrix multiplication
-        x_ui = self.user_embeddings[u] @ self.item_embeddings[i]
-        x_uj = self.user_embeddings[u] @ self.item_embeddings[j]
-        x_uij = x_ui - x_uj
+            if x_uij > epsilon:
+                continue
+            up += 1
+            loss = 1 / (1 + np.exp(x_uij))  # sigmoid
+            # fix the item embeddings
+            self.item_embeddings[i] -= loss * learning_rate * \
+                lambda_ * self.item_embeddings[i]
+            self.item_embeddings[j] -= loss * learning_rate * \
+                lambda_ * self.item_embeddings[j]
 
-        if x_uij > epsilon:
-            return False
+            # update
+            self.item_embeddings[i] += loss * \
+                learning_rate * self.user_embeddings[u]
+            self.item_embeddings[j] -= loss * \
+                learning_rate * self.user_embeddings[u]
 
-        loss = 1 / (1 + np.exp(x_uij))  # sigmoid
-        self.user_embeddings[u] += learning_rate * \
-            loss * (self.item_embeddings[i] - self.item_embeddings[j])
-        self.item_embeddings[i] += learning_rate * \
-            loss * self.user_embeddings[u]
-        self.item_embeddings[j] -= learning_rate * \
-            loss * self.user_embeddings[u]
+            user_loss += loss * learning_rate * self.item_embeddings[j]
+        if up > 0:
+            self.user_embeddings[u] -= learning_rate * \
+                lambda_ * 10 * self.user_embeddings[u]
+            self.user_embeddings[u] += learning_rate * \
+                loss * lambda_ * 10 * user_loss / up
 
-    def train(self, num_epochs: int, learning_rate: float, walk_length: int):
+    def train(self, sample_times: int, learning_rate: float, walk_steps: int, lambda_: float, negative_sample_times: int):
         self.__build_graph__()
         self.__build_mf_model__()
 
-        #
+        # training info
         logger.info("Training...")
         logger.info(
-            f"num_epochs: {num_epochs}, learning_rate: {learning_rate}, walk_length: {walk_length}")
+            f"sample_time: {sample_times}, learning_rate: {learning_rate}, walk_steps: {walk_steps}, lambda: {lambda_}, negative_sample_times: {negative_sample_times}")
+        info = "Model Setting:\n"
+        info += f"\tdimension: {self.dimension}\n"
+        info += f"Model:\n"
+        info += f"\tHOP-REC(HBPR)\n"
+        info += f"Learning Parameters:\n"
+        info += f"\tsample_times: {sample_times}\n"
+        info += f"\tlearning_rate: {learning_rate}\n"
+        info += f"\twalk_steps: {walk_steps}\n"
+        info += f"\tlambda: {lambda_}\n"
+        info += f"\tnegative_sample_times: {negative_sample_times}\n"
+        print(info)
+
+        # start training
+        num_epochs = sample_times * 1000000
 
         for epoch in tqdm(range(num_epochs)):
             user = self.__source_sample__()
             pos_item = self.__target_sample__(user)
 
             margin = 1
-            for step in range(2, walk_length+1):
+            for step in range(2, walk_steps+1):
                 if step != 1:
                     pos_item = self.__target_sample__(pos_item)
                     pos_item = self.__target_sample__(pos_item)
 
-                neg_item = self.__negitive_sample__(pos_item)
-                neg_item = self.__target_sample__(user)
-                self.updateFBPR(user, pos_item, neg_item,
-                                learning_rate/step, margin/step)
+                self.updateFBPRPair(user, pos_item,
+                                    learning_rate/step, margin/step, lambda_, negative_sample_times)
+            # update learning rate
+            learning_rate *= (1 - epoch / num_epochs)
 
     def predict(self, topk: int, fileName: str):
         logger.info("Predicting...")
@@ -153,21 +170,35 @@ class HopRec():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-d", "--dimension", help="MF dimension", type=int, default=10)
+        "-d", "--dimension", help="MF dimension", type=int, default=64)
     parser.add_argument(
-        "-e", "--num_epochs", help="number of epochs", type=int, default=10)
+        "-s", "--sample_times", help="sample times", type=int, default=10)
     parser.add_argument(
-        "-l", "--learning_rate", help="learning rate", type=float, default=0.01)
+        "-lr", "--learning_rate", help="learning rate", type=float, default=0.025)
     parser.add_argument(
-        "-w", "--walk_length", help="walk length", type=int, default=10)
+        "-w", "--walk_steps", help="walk steps", type=int, default=40)
     parser.add_argument(
         "-t", "--topk", help="topk", type=int, default=10)
+    parser.add_argument(
+        "-l", "--lambda", help="lambda", type=float, default=0.0025, dest="lambda_")
+    parser.add_argument(
+        "-n", "--negative", help="negative", type=int, default=5)
     args = parser.parse_args()
 
-    fileName = f"result_d{args.dimension}_e{args.num_epochs}_l{args.learning_rate[2:]}_w{args.walk_length}_t{args.topk}.txt"
+    DIMENSION = args.dimension
+    SAMPLE_TIMES = args.sample_times
+    LEARNING_RATE = args.learning_rate
+    WALK_STEPS = args.walk_steps
+    TOPK = args.topk
+    LAMBDA = args.lambda_
+    NEGATIVE = args.negative
+    fileName = f"result_d{DIMENSION}_s{SAMPLE_TIMES}_lr{str(LEARNING_RATE)[2:]}_w{WALK_STEPS}_l{LAMBDA}_n{NEGATIVE}.txt"
 
-    hoprec = HopRec(dimension=args.dimension)
+    hoprec = HopRec(dimension=DIMENSION)
     hoprec.read_data(path="./data/ml-1m/ratings.csv")
-    hoprec.train(num_epochs=args.num_epochs,
-                 learning_rate=args.learning_rate, walk_length=args.walk_length)
+    hoprec.train(sample_times=SAMPLE_TIMES,
+                 learning_rate=LEARNING_RATE,
+                 walk_steps=WALK_STEPS,
+                 lambda_=LAMBDA,
+                 negative_sample_times=NEGATIVE)
     hoprec.predict(topk=args.topk, fileName=fileName)
