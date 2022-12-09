@@ -131,6 +131,7 @@ class HopRec():
         info += f"\tnegative_sample_times: {negative_sample_times}\n"
         print(info)
 
+        learning_rate_origin = learning_rate
         # start training
         num_epochs = sample_times * 1000000
 
@@ -139,7 +140,7 @@ class HopRec():
             pos_item = self.__target_sample__(user)
 
             margin = 1
-            for step in range(2, walk_steps+1):
+            for step in range(1, walk_steps+1):
                 if step != 1:
                     pos_item = self.__target_sample__(pos_item)
                     pos_item = self.__target_sample__(pos_item)
@@ -147,7 +148,7 @@ class HopRec():
                 self.updateFBPRPair(user, pos_item,
                                     learning_rate/step, margin/step, lambda_, negative_sample_times)
             # update learning rate
-            learning_rate *= (1 - epoch / num_epochs)
+            learning_rate = learning_rate_origin * (1 - epoch / num_epochs)
 
     def predict(self, topk: int, fileName: str):
         logger.info("Predicting...")
