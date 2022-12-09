@@ -86,14 +86,18 @@ class HopRec():
             x_uj = self.user_embeddings[u] @ self.item_embeddings[j]
             x_uij = x_ui - x_uj
 
-            if x_uij > epsilon:
-                continue
+            # if x_uij > epsilon:
+            # continue
             up += 1
-            loss = 1 / (1 + np.exp(x_uij))  # sigmoid
+            loss = 1 / (1 + np.exp(-x_uij))  # sigmoid
+
+            user_loss += loss * learning_rate * \
+                (self.item_embeddings[i] - self.item_embeddings[j])
+
             # fix the item embeddings
-            self.item_embeddings[i] -= loss * learning_rate * \
+            self.item_embeddings[i] -= learning_rate * \
                 lambda_ * self.item_embeddings[i]
-            self.item_embeddings[j] -= loss * learning_rate * \
+            self.item_embeddings[j] -= learning_rate * \
                 lambda_ * self.item_embeddings[j]
 
             # update
@@ -102,12 +106,10 @@ class HopRec():
             self.item_embeddings[j] -= loss * \
                 learning_rate * self.user_embeddings[u]
 
-            user_loss += loss * learning_rate * self.item_embeddings[j]
         if up > 0:
             self.user_embeddings[u] -= learning_rate * \
                 lambda_ * 10 * self.user_embeddings[u]
-            self.user_embeddings[u] += learning_rate * \
-                loss * lambda_ * 10 * user_loss / up
+            self.user_embeddings[u] += user_loss / up
 
     def train(self, sample_times: int, learning_rate: float, walk_steps: int, lambda_: float, negative_sample_times: int):
         self.__build_graph__()
