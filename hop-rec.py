@@ -59,7 +59,7 @@ class HopRec():
 
     def __source_sample__(self):
         u = self.sampler.sample()
-        if u[0] != "u":
+        while u[0] != "u":
             u = self.sampler.sample(u)
         return u
 
