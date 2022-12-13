@@ -37,14 +37,13 @@ class sampler:
             idB = self.item2i[itemB]
             
             self.data[idA][0].append(idB)
-            self.data[idA][1].append(None)
+            self.data[idA][1].append(-1)
             self.data[idA][2].append(weight)
             
             if bidirectional:
                 self.data[idB][0].append(idA)
-                self.data[idB][1].append(None)
+                self.data[idB][1].append(-1)
                 self.data[idB][2].append(weight)
-                #raise ValueError("duplicated edge of item '{A}' and '{B}'.".format(A=itemA, B=itemB))
         self.i2item = np.array(self.i2item)
         return
     
@@ -54,8 +53,6 @@ class sampler:
             logger.info('building alias table')
             to_iter = tqdm(to_iter)
         for i in to_iter:
-            self.data[i][0] = np.array(self.data[i][0])
-            self.data[i][1] = np.array(self.data[i][1])
             self.data[i][2] = np.array(self.data[i][2])
             
             mul = np.float64(len(self.data[i][0]))/np.sum(self.data[i][2])
@@ -93,6 +90,9 @@ class sampler:
                 else:
                     self.data[i][2][a] = np.float64(1)
 
+            self.data[i][0] = np.array(self.data[i][0], dtype="i4")
+            self.data[i][1] = np.array(self.data[i][1], dtype="i4")
+
     def __init__(self, graph, bidirectional=True, info=False):
         '''
             graph is a array of tuple (itemA, itemB, weight)
@@ -116,17 +116,15 @@ class sampler:
                 raise KeyError("item '{item}' not in graph!".format(item=target))
             randA = np.random.randint(len(self.data[targetIDX][0]), size=size)
             thresh = self.data[targetIDX][2][randA]
-            Hi = self.data[targetIDX][1][randA]
             Lo = self.data[targetIDX][0][randA]
+            Hi = self.data[targetIDX][1][randA]
             randB = np.random.uniform(0, 1, size=size)
             returnval = np.where(randB <= thresh, Lo, Hi)
-            '''
-            if randB > self.data[targetIDX][2][randA]:
-                returnval = self.i2item[self.data[targetIDX][1][randA]]
-            else:
-                returnval = self.i2item[self.data[targetIDX][0][randA]]
-            '''
-        return returnval
+            returnval = self.i2item[returnval]
+        if size == 1:
+            return returnval[0]
+        else:
+            return returnval
 
 
 if __name__ == '__main__':
@@ -138,4 +136,4 @@ if __name__ == '__main__':
         except EOFError:
             break
     s = sampler(data, info=True)
-    print(s.sample(size=100000000))
+    print(s.sample("u1", size=10))

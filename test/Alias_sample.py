@@ -1,7 +1,7 @@
 import sys
 sys.path.append("../")
 from time import time
-from sampler import sampler
+from sampler_with_size import sampler
 from tqdm import tqdm
 from loguru import logger
 
@@ -19,6 +19,6 @@ if __name__ == '__main__':
     logger.info("sampling")
 
     for i in tqdm(range(100000000)):
-        s.sample("u1")
+        s.sample("u1", size=100000000)
 
     print(time() - st)
