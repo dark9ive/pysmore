@@ -1,24 +1,26 @@
-import sys
-sys.path.append("../")
 from time import time
-from sampler import sampler
+import random
+import numpy as np
 from tqdm import tqdm
-from loguru import logger
 
 if __name__ == '__main__':
     st = time()
-    data = []
+    item = []
+    prob = []
     while True:
         try:
             itemA, itemB, weight = input().split(" ")
-            data.append((itemA, itemB, weight))
+            item.append(itemB)
+            prob.append(int(weight))
         except EOFError:
             break
 
-    s = sampler(data, info=True)
-    logger.info("sampling")
+    print(prob)
+    prob /= np.sum(prob)
+    print(item)
+    print(prob)
 
     for i in tqdm(range(100000000)):
-        s.sample("u1")
+        random.choices(item, weights=prob, k=1)
 
     print(time() - st)

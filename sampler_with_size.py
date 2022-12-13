@@ -45,7 +45,7 @@ class sampler:
                 self.data[idB][1].append(None)
                 self.data[idB][2].append(weight)
                 #raise ValueError("duplicated edge of item '{A}' and '{B}'.".format(A=itemA, B=itemB))
-        #self.i2item = np.array(self.i2item)
+        self.i2item = np.array(self.i2item)
         return
     
     def cal_alias_table(self, info=False):
@@ -54,8 +54,8 @@ class sampler:
             logger.info('building alias table')
             to_iter = tqdm(to_iter)
         for i in to_iter:
-            #self.data[i][0] = np.array(self.data[i][0])
-            #self.data[i][1] = np.array(self.data[i][1])
+            self.data[i][0] = np.array(self.data[i][0])
+            self.data[i][1] = np.array(self.data[i][1])
             self.data[i][2] = np.array(self.data[i][2])
             
             mul = np.float64(len(self.data[i][0]))/np.sum(self.data[i][2])
@@ -102,10 +102,10 @@ class sampler:
         gc.collect()
         return
 
-    def sample(self, target=None):
+    def sample(self, target=None, size=1):
         returnval = None
         if target is None:
-            randIDX = np.random.randint(self.item_count)
+            randIDX = np.random.randint(self.item_count, size=size)
             returnval = self.i2item[randIDX]
         else:
             target = str(target)
@@ -114,12 +114,18 @@ class sampler:
                 targetIDX = self.item2i[target]
             except KeyError:
                 raise KeyError("item '{item}' not in graph!".format(item=target))
-            randA = np.random.randint(len(self.data[targetIDX][0]))
+            randA = np.random.randint(len(self.data[targetIDX][0]), size=size)
+            thresh = self.data[targetIDX][2][randA]
+            Hi = self.data[targetIDX][1][randA]
+            Lo = self.data[targetIDX][0][randA]
             randB = np.random.uniform(0, 1)
+            returnval = np.where(randB <= thresh, Hi, Lo)
+            '''
             if randB > self.data[targetIDX][2][randA]:
                 returnval = self.i2item[self.data[targetIDX][1][randA]]
             else:
                 returnval = self.i2item[self.data[targetIDX][0][randA]]
+            '''
         return returnval
 
 
