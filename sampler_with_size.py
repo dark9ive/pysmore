@@ -118,8 +118,8 @@ class sampler:
             thresh = self.data[targetIDX][2][randA]
             Hi = self.data[targetIDX][1][randA]
             Lo = self.data[targetIDX][0][randA]
-            randB = np.random.uniform(0, 1)
-            returnval = np.where(randB <= thresh, Hi, Lo)
+            randB = np.random.uniform(0, 1, size=size)
+            returnval = np.where(randB <= thresh, Lo, Hi)
             '''
             if randB > self.data[targetIDX][2][randA]:
                 returnval = self.i2item[self.data[targetIDX][1][randA]]
@@ -138,4 +138,4 @@ if __name__ == '__main__':
         except EOFError:
             break
     s = sampler(data, info=True)
-    print(s.sample(size=10))
+    print(s.sample(size=100000000))
