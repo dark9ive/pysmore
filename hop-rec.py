@@ -3,7 +3,6 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 from sampler import Sampler
-import asyncio
 
 SEED = 0
 TIMES_PER_SAMPLE = 1000
