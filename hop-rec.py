@@ -187,6 +187,13 @@ if __name__ == "__main__":
         "-l", "--lambda", help="lambda", type=float, default=0.0025, dest="lambda_")
     parser.add_argument(
         "-n", "--negative", help="negative", type=int, default=5)
+    parser.add_argument(
+        "-i", "--input", help="input path", type=str)
+    parser.add_argument(
+        "-f", "--field", help="hop-rec field", type=str)
+    parser.add_argument(
+        "-o", "--output", help="output path", type=str, default="result")
+
     args = parser.parse_args()
 
     DIMENSION = args.dimension
@@ -196,7 +203,11 @@ if __name__ == "__main__":
     TOPK = args.topk
     LAMBDA = args.lambda_
     NEGATIVE = args.negative
-    fileName = f"result_d{DIMENSION}_s{SAMPLE_TIMES}_lr{str(LEARNING_RATE)[2:]}_w{WALK_STEPS}_l{LAMBDA}_n{NEGATIVE}.txt"
+    INPUT_PATH = args.input
+    FIELD = args.field
+    OUTPUT_PATH = args.output
+
+    # fileName = f"result_d{DIMENSION}_s{SAMPLE_TIMES}_lr{str(LEARNING_RATE)[2:]}_w{WALK_STEPS}_l{LAMBDA}_n{NEGATIVE}.txt"
 
     hoprec = HopRec(dimension=DIMENSION)
     hoprec.read_data(path="./data/ml-1m/ratings.csv")
