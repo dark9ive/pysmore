@@ -6,6 +6,7 @@ from sampler import Sampler
 import asyncio
 
 SEED = 0
+TIMES_PER_SAMPLE = 1000
 
 
 class HopRec():
@@ -133,7 +134,7 @@ class HopRec():
 
         learning_rate_origin = learning_rate
         # start training
-        num_epochs = sample_times * 1000000
+        num_epochs = sample_times * TIMES_PER_SAMPLE
 
         for epoch in tqdm(range(num_epochs)):
             user = self.__source_sample__()
