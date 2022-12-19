@@ -192,29 +192,11 @@ class HopRec():
         f = open(save_path, 'w')
         f.write(f"{self.num_users+self.num_items} {self.dimension}\n")
         for u in range(0, self.num_users):
-            f.write(f"{index_to_user[u]} {' '.join([str(i) for i in self.user_embeddings[u]])}\n")
+            f.write(
+                f"{index_to_user[u]} {' '.join([str(i) for i in self.user_embeddings[u]])}\n")
         for i in range(0, self.num_items):
-            f.write(f"{index_to_item[i]} {' '.join([str(i) for i in self.item_embeddings[i]])}\n")
-
-
-    def predict(self, topk: int, fileName: str):
-        logger.info("Predicting...")
-
-        p = self.user_embeddings @ self.item_embeddings.T
-
-        self.predictions = {}
-        for u in range(1, self.num_users):
-            self.predictions[u] = np.argsort(-p[u])
-            self.predictions[u] = self.predictions[u][:topk]
-
-        logger.info("End predicting.")
-
-        logger.info("Saving predictions...")
-        with open(fileName, 'w') as f:
-            for u in range(1, self.num_users):
-                f.write(
-                    f"{u},{' '.join([str(i) for i in self.predictions[u]])}\n")
-        logger.info("End saving predictions.")
+            f.write(
+                f"{index_to_item[i]} {' '.join([str(i) for i in self.item_embeddings[i]])}\n")
 
 
 if __name__ == "__main__":
@@ -261,5 +243,5 @@ if __name__ == "__main__":
                  learning_rate=LEARNING_RATE,
                  walk_steps=WALK_STEPS,
                  lambda_=LAMBDA,
-                 negative_sample_times=NEGATIVE)
-    hoprec.predict(topk=args.topk, fileName=fileName)
+                 negative_sample_times=NEGATIVE,
+                 save_path=OUTPUT_PATH)
