@@ -19,19 +19,44 @@ class HopRec():
         self.user_embeddings = None
         self.item_embeddings = None
 
-    def read_data(self, path: str):
+        self.user_index = {}
+        self.item_index = {}
+
+        self.num_users = 0
+        self.num_items = 0
+
+    def read_data(self, path: str, field_path: str):
+        logger.info("Reading field...")
+        # build field info
+        with open(field_path, "r") as f:
+            lines = f.readlines()
+        lines = [line.strip().split(" ") for line in lines]
+        field = {line[0]: line[1] for line in lines}
+
         logger.info("Reading data...")
-        # read user data as csv
+        # read user data
         with open(path, 'r') as f:
             data = f.readlines()
-
-        # 0: userId, 1: itemId, 2: rating, 3: timestamp
+        # 0: nodeA, 1: nodeB, 2: weight
         logger.info("Splitting data...")
-        data = [line.strip().split(',') for line in data]
-        data = [(int(line[0]), int(line[1]), float(line[2]), int(line[3]))
-                for line in data]
-        self.num_users = max([line[0] for line in data]) + 1
-        self.num_items = max([line[1] for line in data]) + 1
+        data = [line.strip().split(" ") for line in data]
+        data = [(line[0], line[1], float(line[2])) for line in data]
+
+        # # get user and item index
+        logger.info("Building user and item index...")
+        for line in tqdm(data):
+            for i in range(2):
+                node = line[i]
+                assert node in field
+                vertex_field = field[node]
+                if vertex_field == "u":
+                    if node not in self.user_index:
+                        self.user_index[node] = self.num_users
+                        self.num_users += 1
+                elif vertex_field == "i":
+                    if node not in self.item_index:
+                        self.item_index[node] = self.num_items
+                        self.num_items += 1
 
         ######
         self.ui_matrix = np.zeros((self.num_users, self.num_items))
@@ -39,8 +64,18 @@ class HopRec():
 
         logger.info("Building user-item matrix...")
         for line in tqdm(data):
-            self.ui_matrix[line[0], line[1]] = line[2]
-            self.graph.append((f"u_{line[0]}", f"i_{line[1]}", 1))
+            if field[line[0]] == "u" and field[line[1]] == "i":
+                u_id = line[0]
+                i_id = line[1]
+                u_index = self.user_index[line[0]]
+                i_index = self.item_index[line[1]]
+            elif field[line[1]] == "u" and field[line[0]] == "i":
+                u_id = line[1]
+                i_id = line[0]
+                u_index = self.user_index[line[1]]
+                i_index = self.item_index[line[0]]
+            self.ui_matrix[u_index, i_index] = line[2]
+            self.graph.append((u_id, i_id, 1))
 
         logger.info("End reading data.")
 
@@ -78,9 +113,9 @@ class HopRec():
 
         user_loss = np.zeros(self.dimension)
         for w_ in range(negative_sample_times):
-            u = int(u_id[2:])
-            i = int(i_id[2:])
-            j = int(self.__negitive_sample__(i_id)[2:])
+            u = self.user_index[u_id]
+            i = self.item_index[i_id]
+            j = self.item_index[self.__negitive_sample__(i_id)]
 
             # @ is matrix multiplication
             x_ui = self.user_embeddings[u] @ self.item_embeddings[i]
@@ -112,7 +147,7 @@ class HopRec():
                 lambda_ * 10 * self.user_embeddings[u]
             self.user_embeddings[u] += user_loss / up
 
-    def train(self, sample_times: int, learning_rate: float, walk_steps: int, lambda_: float, negative_sample_times: int):
+    def train(self, sample_times: int, learning_rate: float, walk_steps: int, lambda_: float, negative_sample_times: int, save_path: str):
         self.__build_graph__()
         self.__build_mf_model__()
 
@@ -150,6 +185,17 @@ class HopRec():
                                     learning_rate/step, margin/step, lambda_, negative_sample_times)
             # update learning rate
             learning_rate = learning_rate_origin * (1 - epoch / num_epochs)
+        logger.info("End training.")
+        logger.info("Saving model...")
+        index_to_user = {v: k for k, v in self.user_index.items()}
+        index_to_item = {v: k for k, v in self.item_index.items()}
+        f = open(save_path, 'w')
+        f.write(f"{self.num_users+self.num_items} {self.dimension}\n")
+        for u in range(0, self.num_users):
+            f.write(f"{index_to_user[u]} {' '.join([str(i) for i in self.user_embeddings[u]])}\n")
+        for i in range(0, self.num_items):
+            f.write(f"{index_to_item[i]} {' '.join([str(i) for i in self.item_embeddings[i]])}\n")
+
 
     def predict(self, topk: int, fileName: str):
         logger.info("Predicting...")
@@ -210,7 +256,7 @@ if __name__ == "__main__":
     # fileName = f"result_d{DIMENSION}_s{SAMPLE_TIMES}_lr{str(LEARNING_RATE)[2:]}_w{WALK_STEPS}_l{LAMBDA}_n{NEGATIVE}.txt"
 
     hoprec = HopRec(dimension=DIMENSION)
-    hoprec.read_data(path="./data/ml-1m/ratings.csv")
+    hoprec.read_data(path=INPUT_PATH, field_path=FIELD)
     hoprec.train(sample_times=SAMPLE_TIMES,
                  learning_rate=LEARNING_RATE,
                  walk_steps=WALK_STEPS,
