@@ -5,7 +5,6 @@ import gc
 from tqdm import tqdm
 from time import time
 from loguru import logger
-import multiprocessing
 
 thresh = 0.000001
 
@@ -48,28 +47,41 @@ class sampler:
         return
     
     def cal_alias_table(self, info=False):
+        
         to_iter = range(self.item_count)
+        
+        #   If debug mode (info) is on, show init process bar.
         if info:
             logger.info('building alias table')
             to_iter = tqdm(to_iter)
+        
         for i in to_iter:
+            #   Make data into numpy array for the best performance.
+            self.data[i][0] = np.array(self.data[i][0])
+            self.data[i][1] = np.array(self.data[i][1])
             self.data[i][2] = np.array(self.data[i][2])
             
+            #   Start making alias table.
             mul = np.float64(len(self.data[i][0]))/np.sum(self.data[i][2])
             self.data[i][2] *= mul
             
             SA = []     # >1 stack
             SB = []     # <1 stack
 
+            #   Sort all numbers into the stacks.
             for j in range(len(self.data[i][0])):
                 if (self.data[i][2][j] - 1) >= thresh:
                     SA.append(j)
                 elif (1 - self.data[i][2][j]) >= thresh:
                     SB.append(j)
+
+            #   Determine whether to take numbers from stack or not
             SA_tak = True
             SB_tak = True
             a = None
             b = None
+
+            #   If stack not empty, continue process.
             while SA or SB:
                 if SA_tak:
                     a = SA.pop()
@@ -81,17 +93,13 @@ class sampler:
                 self.data[i][1][b] = self.data[i][0][a]
                 self.data[i][2][a] -= 1 - self.data[i][2][b]
                 if (self.data[i][2][a] - 1) >= thresh:
-                    #SA.append(a)
                     SA_tak = False
                 elif (1 - self.data[i][2][a]) >= thresh:
-                    #SB.append(a)
                     b = a
                     SB_tak = False
                 else:
                     self.data[i][2][a] = np.float64(1)
 
-            self.data[i][0] = np.array(self.data[i][0], dtype="i4")
-            self.data[i][1] = np.array(self.data[i][1], dtype="i4")
 
     def __init__(self, graph, bidirectional=True, info=False):
         '''
@@ -104,9 +112,13 @@ class sampler:
 
     def sample(self, target=None, size=1):
         returnval = None
+
+        #   If target is none, sample a random node from the graph.
         if target is None:
             randIDX = np.random.randint(self.item_count, size=size)
             returnval = self.i2item[randIDX]
+
+        #   Else, sample a node which is connected with the target.
         else:
             target = str(target)
             targetIDX = -1
@@ -114,16 +126,27 @@ class sampler:
                 targetIDX = self.item2i[target]
             except KeyError:
                 raise KeyError("item '{item}' not in graph!".format(item=target))
-            randA = np.random.randint(len(self.data[targetIDX][0]), size=size)
-            thresh = self.data[targetIDX][2][randA]
-            Lo = self.data[targetIDX][0][randA]
-            Hi = self.data[targetIDX][1][randA]
-            randB = np.random.uniform(0, 1, size=size)
-            returnval = np.where(randB <= thresh, Lo, Hi)
-            returnval = self.i2item[returnval]
-        if size == 1:
-            return returnval[0]
-        else:
+
+            #   This special way performs well on sampling one at a time.
+            if size == 1:
+                randA = np.random.randint(len(self.data[targetIDX][0]))
+                randB = np.random.uniform(0, 1)
+                if randB > self.data[targetIDX][2][randA]:
+                    returnval = self.i2item[self.data[targetIDX][1][randA]]
+                else:
+                    returnval = self.i2item[self.data[targetIDX][0][randA]]
+
+            else:
+                randA = np.random.randint(len(self.data[targetIDX][0]), size=size)
+                thresh = self.data[targetIDX][2][randA]
+                Lo = self.data[targetIDX][0][randA]
+                Hi = self.data[targetIDX][1][randA]
+                randB = np.random.uniform(0, 1, size=size)
+                #   If random 0~1 is smaller than thresh, return item below
+                #   Else return item above.
+                returnval = np.where(randB <= thresh, Lo, Hi)
+                returnval = self.i2item[returnval]
+
             return returnval
 
 
