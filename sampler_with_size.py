@@ -116,7 +116,11 @@ class sampler:
         #   If target is none, sample a random node from the graph.
         if target is None:
             randIDX = np.random.randint(self.item_count, size=size)
-            returnval = self.i2item[randIDX]
+            if size == 1:
+                [returnval] = self.i2item[randIDX]
+            else:
+                returnval = self.i2item[randIDX]
+
 
         #   Else, sample a node which is connected with the target.
         else:
@@ -147,8 +151,9 @@ class sampler:
                 returnval = np.where(randB <= thresh, Lo, Hi)
                 returnval = self.i2item[returnval]
 
-            return returnval
+        return returnval
 
+#   Simple test.
 
 if __name__ == '__main__':
     data = []
@@ -159,4 +164,4 @@ if __name__ == '__main__':
         except EOFError:
             break
     s = sampler(data, info=True)
-    print(s.sample("u1", size=10))
+    print(s.sample(size=10))
